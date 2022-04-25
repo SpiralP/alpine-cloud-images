@@ -105,7 +105,7 @@ build {
       format            = B.value.local_format
       vm_name           = "image.${B.value.local_format}"
 
-      accelerator       = "tcg"
+      accelerator       = B.value.arch == "aarch64" ? "tcg" : "kvm"
     }
   }
 
