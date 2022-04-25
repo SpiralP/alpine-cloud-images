@@ -205,7 +205,14 @@ class AWSCloudAdapter(CloudAdapterInterface):
                 Architecture=self.ARCH[ic.arch],
                 BlockDeviceMappings=[{
                     'DeviceName': '/dev/xvda',
-                    'Ebs': {'SnapshotId': snapshot_id}
+                    'Ebs': {
+                        'SnapshotId': snapshot_id,
+                        'DeleteOnTermination': True,
+                        'VolumeSize': 1,
+                        'VolumeType': 'gp3',
+                        'Iops': 3000,
+                        'Throughput': 125,
+                    }
                 }],
                 Description=description,
                 EnaSupport=True,

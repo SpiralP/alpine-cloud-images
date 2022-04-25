@@ -54,7 +54,7 @@ WORK_CLEAN = {'bin', 'include', 'lib', 'pyvenv.cfg', '__pycache__'}
 WORK_OVERLAYS = ['configs', 'scripts']
 OVMF_FIRMWARE = {
     'aarch64': 'usr/share/OVMF/QEMU_EFI.fd',
-    'x86_64': 'usr/share/OVMF/OVMF.fd'
+    'x86_64': 'usr/share/OVMF/OVMF_CODE.fd'
 }
 alpine = Alpine()
 
@@ -187,8 +187,9 @@ def install_qemu_firmware():
 
         firm_bin = os.path.join(firm_dir, f"uefi-{arch}.bin")
         os.symlink(bin, firm_bin)
-        log.info('Padding "%s" to 67108864 bytes', firm_bin)
-        subprocess.run(['truncate', '-s', '67108864', firm_bin])
+        if arch == "aarch64":
+            log.info('Padding "%s" to 67108864 bytes', firm_bin)
+            subprocess.run(['truncate', '-s', '67108864', firm_bin])
 
 
 ### Command Line & Logging
@@ -289,7 +290,8 @@ env = os.environ | {
 
 packer_cmd = [
     'packer', 'build', '-timestamp-ui',
-    '-parallel-builds', str(args.parallel)
+    '-parallel-builds', str(args.parallel),
+    '-on-error=ask'
 ]
 if args.no_color:
     packer_cmd.append('-color=false')

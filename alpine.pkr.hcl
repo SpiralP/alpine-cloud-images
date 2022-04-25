@@ -104,6 +104,8 @@ build {
       disk_size         = B.value.size
       format            = B.value.local_format
       vm_name           = "image.${B.value.local_format}"
+
+      accelerator       = "tcg"
     }
   }
 
@@ -152,18 +154,17 @@ build {
         "DEBUG=${var.DEBUG}",
         "ARCH=${B.value.arch}",
         "BOOTLOADER=${B.value.bootloader}",
-        "BOOTSTRAP=${B.value.bootstrap}",
         "BUILD_NAME=${B.value.name}",
         "BUILD_REVISION=${B.value.revision}",
         "CLOUD=${B.value.cloud}",
         "END_OF_LIFE=${B.value.end_of_life}",
+        "FILESYSTEM=${B.value.filesystem}",
         "FIRMWARE=${B.value.firmware}",
         "IMAGE_LOGIN=${B.value.login}",
         "INITFS_FEATURES=${B.value.initfs_features}",
         "KERNEL_MODULES=${B.value.kernel_modules}",
         "KERNEL_OPTIONS=${B.value.kernel_options}",
         "MOTD=${B.value.motd}",
-        "NTP_SERVER=${B.value.ntp_server}",
         "PACKAGES_ADD=${B.value.packages.add}",
         "PACKAGES_DEL=${B.value.packages.del}",
         "PACKAGES_NOSCRIPTS=${B.value.packages.noscripts}",

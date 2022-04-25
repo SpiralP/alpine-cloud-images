@@ -1,0 +1,40 @@
+#!/sbin/openrc-run
+
+description="Expand Filesystem"
+
+depend() {
+	before mdev
+}
+
+expand_filesystem() {
+	PARTITION_PATH="$(cat /proc/mounts | grep ' / ' | cut -d ' ' -f 1)"
+	PARTITION_NAME="${PARTITION_PATH#/dev/}"
+	[ -n "$PARTITION_PATH" ] || return 1
+	[ -n "$PARTITION_NAME" ] || return 1
+
+	PARTITION_TYPE="$(cat /proc/mounts | grep ' / ' | cut -d ' ' -f 3)"
+	[ -n "$PARTITION_TYPE" ] || return 1
+
+	source "/sys/class/block/$PARTITION_NAME/uevent"
+	PARTITION_NUMBER="$PARTN"
+	[ -n "$PARTITION_NUMBER" ] || return 1
+	[ -n "$MAJOR" ] || return 1
+
+	source "/sys/dev/block/$MAJOR:0/uevent"
+	DISK_NAME="$DEVNAME"
+	[ -n "$DISK_NAME" ] || return 1
+
+	growpart "/dev/$DISK_NAME" "$PARTITION_NUMBER"
+
+	if [ "$PARTITION_TYPE" = ext4 ]; then
+		resize2fs "/dev/$PARTITION_NAME" || return 1
+	elif [ "$PARTITION_TYPE" = btrfs ]; then
+		btrfs filesystem resize max / || return 1
+	fi
+}
+
+start() {
+	ebegin "Expanding Root Volume/Partition"
+	expand_filesystem
+	eend $?
+}

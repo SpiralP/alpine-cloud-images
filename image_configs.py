@@ -211,7 +211,6 @@ class ImageConfig():
         # stuff that really ought to be there
         t = {
             'arch': self.arch,
-            'bootstrap': self.bootstrap,
             'cloud': self.cloud,
             'description': self.image_description,
             'end_of_life': self.end_of_life,

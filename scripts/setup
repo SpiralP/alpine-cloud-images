@@ -21,11 +21,14 @@ einfo() {
 setup_builder() {
     einfo "Setting up Builder Instance"
     setup-apkrepos -1   # main repo via dl-cdn
+    setup-ntp -c busybox
+    yes "" | setup-dns 1.1.1.1
     # ODO? also uncomment community repo?
     # Always use latest versions within the release, security patches etc.
     apk upgrade --no-cache --available
     apk --no-cache add \
         e2fsprogs \
+        btrfs-progs \
         dosfstools \
         gettext \
         lsblk \
@@ -47,8 +50,8 @@ make_filesystem() {
         # EFI partition isn't optimally aligned, but is rarely used after boot
         parted "$DEVICE" -- \
             mklabel gpt \
-            mkpart EFI fat32 512KiB 1MiB \
-            mkpart / ext4 1MiB 100% \
+            mkpart EFI fat32 512KiB 2MiB \
+            mkpart / ext4 2MiB 100% \
             set 1 esp on \
             unit MiB print
 
@@ -56,9 +59,21 @@ make_filesystem() {
         mkfs.fat -n EFI "${DEVICE}1"
     fi
 
-    mkfs.ext4 -O ^64bit -L / "$root_dev"
-    mkdir -p "$TARGET"
-    mount -t ext4 "$root_dev" "$TARGET"
+    if [ "$FILESYSTEM" = ext4 ]; then
+        if [ "$FIRMWARE" = bios ]; then
+            mkfs.ext4 -O ^64bit -L / "$root_dev"
+        else
+            mkfs.ext4 -L / "$root_dev"
+        fi
+        mkdir -p "$TARGET"
+        mount -t ext4 "$root_dev" "$TARGET"
+    elif [ "$FILESYSTEM" = btrfs ]; then
+        mkfs.btrfs -L / "$root_dev"
+        mkdir -p "$TARGET"
+        mount -t btrfs -o compress=zstd "$root_dev" "$TARGET"
+    else
+        die "unimplemented FILESYSTEM=$FILESYSTEM"
+    fi
 
     if [ "$FIRMWARE" = uefi ]; then
         mkdir -p "$TARGET/boot/efi"
@@ -180,11 +195,6 @@ configure_system() {
     # default network configuration
     install -o root -g root -Dm644 -t "$TARGET/etc/network" "$SETUP/interfaces"
 
-    # configure NTP server, if specified
-    [ -n "$NTP_SERVER" ] && \
-        sed -e 's/^pool /server /' -e "s/pool.ntp.org/$NTP_SERVER/g" \
-            -i "$TARGET/etc/chrony/chrony.conf"
-
     # setup fstab
     install -o root -g root -Dm644 -t "$TARGET/etc" "$SETUP/fstab"
     # if we're using an EFI bootloader, add extra line for EFI partition
@@ -192,8 +202,11 @@ configure_system() {
         cat "$SETUP/fstab.grub-efi" >> "$TARGET/etc/fstab"
     fi
 
-    # Disable getty for physical ttys, enable getty for serial ttyS0.
-    sed -Ei -e '/^tty[0-9]/s/^/#/' -e '/^#ttyS0:/s/^#//' "$TARGET/etc/inittab"
+    # Disable getty for physical ttys, disable getty for serial ttyS0.
+    sed -Ei \
+        -e '/^tty[0-9]/s/^/#/' \
+        -e '/^ttyS0:/s/^/#/' \
+        "$TARGET/etc/inittab"
 
     # setup sudo and/or doas
     if grep -q '^sudo$' "$TARGET/etc/apk/world"; then
@@ -213,6 +226,9 @@ configure_system() {
     chroot "$TARGET" /usr/sbin/adduser -h "/home/$user" -s /bin/sh -G "$user" -D "$user"
     chroot "$TARGET" /usr/sbin/addgroup "$user" wheel
     chroot "$TARGET" /bin/sh -c "echo '$user:*' | /usr/sbin/chpasswd -e"
+    
+    chroot "$TARGET" /bin/su "$user" -c \
+        "mkdir /home/$user/.ssh && echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJxOA4hzz9Yxcq1AJhC5MMnt13RVGerxvyrh4A4alqhk SpiralP' | tee ~/.ssh/authorized_keys"
 
     # modify PS1s in /etc/profile to add user
     sed -Ei \
@@ -223,6 +239,11 @@ configure_system() {
 
     # write /etc/motd
     echo "$MOTD" > "$TARGET"/etc/motd
+
+
+    install -o root -g root -Dm755 -t "$TARGET/etc/init.d" "$SETUP/expand-filesystem"
+    sed -Ei -e 's|#key_types_to_generate=""|key_types_to_generate="ed25519"|' "$TARGET/etc/conf.d/sshd"
+    sed -Ei -e 's|AllowTcpForwarding no|AllowTcpForwarding yes|' "$TARGET/etc/ssh/sshd_config"
 
     setup_services
 }
